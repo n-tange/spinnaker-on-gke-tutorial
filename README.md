@@ -1,8 +1,9 @@
 # MacOSX mojaveにhalyardをインストールして、GKE上にSpinnakerをデプロイする
-2018/12/28
+2019/01/29 改定
 
 ## 参考元
 * Spinnaker公式：[Try out Halyard on GKE](https://www.spinnaker.io/setup/quickstart/halyard-gke/)
+* Spinnaker公式：[Kubernetes Provider V2 (Manifest Based)](https://www.spinnaker.io/setup/install/providers/kubernetes-v2/)
 
 ## Mac の準備
 ### gcloudをインストールする
@@ -10,29 +11,29 @@
 
   gcloudを認証してデフォルトのGCPプロジェクトを設定する。  
   自分のGCP管理アカウントでgcloudを認証するには以下のコマンドを実施する。
-  ```console
+  ```sh
   gcloud auth login
   ```
 
   デフォルトのgcloudプロジェクトを設定する。
-  ```console
+  ```sh
   gcloud config set project <PROJECT_NAME>
   ```
 
 ### kubectlをインストールする
   kubectlは[homebrewでインストール可能](https://kubernetes.io/docs/tasks/tools/install-kubectl/#install-with-homebrew-on-macos)なので、以下のコマンドでインストールする。
-  ```console
+  ```sh
   brew install kubernetes-cli
   ```
 
   以下のコマンドで動作をテストする。
-  ```console
+  ```sh
   kubectl version
   ```
 
 ### halyardをインストールする
   [Spinnaker公式](https://www.spinnaker.io/setup/install/halyard/#install-on-debianubuntu-and-macos)のインストール手順に従いインストールする。
-  ```console
+  ```sh
   curl -O https://raw.githubusercontent.com/Spinnaker/halyard/master/install/macos/InstallHalyard.sh
 
   sudo bash InstallHalyard.sh
@@ -45,7 +46,7 @@
 
 ### bash-completionをインストールする
   必須ではないが、bash-completionをインストールしておくとTabによるコマンド補完が可能になり便利。homebrewでインストール可能。
-  ```console
+  ```sh
   brew install bash-completion
   ```
 
@@ -58,7 +59,7 @@
   ```
 
   設定を反映させる。
-  ```console
+  ```sh
   source ~/.bash_profile
   ```
 
@@ -68,24 +69,20 @@
 ## GKE の準備
 ### Kubernetesクラスタを作成する
   GKEで使用可能なクラスタバージョンは頻繁に変更されるので以下のコマンドで「validMasterVersions:」に表示されているバージョンを確認しておく。
-  ```console
+  ```sh
   gcloud container get-server-config
   ```
 
   以下のコマンドを実行して、kubernetesクラスタを作成する。  
   クラスタ名は「k8s」、ゾーンは「asia-northeast1-a」とした。  
-  他、ノード数を3、クラスタバージョンを1.11.3-gke.24にした。
-  ```console
+  他、ノード数を3、クラスタバージョンを1.11.6-gke.3にした。
+  ```sh
   gcloud container clusters create k8s \
   --machine-type n1-standard-1 \
   --zone asia-northeast1-a \
   --num-nodes 3 \
-  --cluster-version 1.11.3-gke.24
+  --cluster-version 1.11.6-gke.3
   ```
-
-  クラスタの作成が完了したら、[Google Cloud ConsoleのGKEセクション](https://console.cloud.google.com/kubernetes/list)から作成したクラスタを編集し
-  「以前の承認」を有効にする。
-
 
 ### APIを有効にする
   Google Cloud Consoleに移動して、以下のAPIを有効にする。
@@ -96,7 +93,7 @@
   参照元のSpinnaker公式にある資格情報ではSpinnakerのデプロイに失敗するので所有者の資格情報を作成して使用した。本来であれば適切な資格情報を作成すべし。
 
   SpinnakerがGCPサービスを利用するためのサービスアカウントを作成する。
-  ```console
+  ```sh
   GCP_PROJECT=$(gcloud info --format='value(config.project)')
   GCP_SA=owner-service-account
 
@@ -117,7 +114,7 @@
 ## 資格情報の収集
 ### GKEクラスタの設定ファイルを取得する
   SpinnakerをデプロイするGKEクラスタの設定ファイル「~/.kube/config」を生成する。
-  ```console
+  ```sh
   GKE_CLUSTER_NAME=k8s
   GKE_CLUSTER_ZONE=asia-northeast1-a
 
@@ -129,7 +126,7 @@
 
 ### GCPプロジェクト用サービスアカウントのjsonファイルを取得す
   以下のコマンドで、先に作成した所有者権限のサービスアカウントのjsonファイルを取得する。
-  ```console
+  ```sh
   GCP_SA=owner-service-account
   GCP_SA_DEST=~/.gcp/gcp.json
 
@@ -146,13 +143,13 @@
 ## Spinnakerの設定
 ### Spinnakerのバージョンを指定
   HalyardがSpinnakerの最新バージョンを使用するように設定する。
-  ```console
+  ```sh
   hal config version edit --version $(hal version latest -q)
   ```
 
 ### SpinnakerとGoogleCloudStorageの連携設定
   Spinnakerの永続データの配置先をGCSに設定する。
-  ```console
+  ```sh
   hal config storage gcs edit \
     --project $(gcloud info --format='value(config.project)') \
     --json-path ~/.gcp/gcp.json
@@ -162,7 +159,7 @@
 
 ### SpinnakerとGoogleContainerRegistryの連携設定
   GCRからイメージをプルできるように設定する。
-  ```console
+  ```sh
   hal config provider docker-registry account add my-gcr-account \
     --address gcr.io \
     --password-file ~/.gcp/gcp.json \
@@ -171,22 +168,54 @@
   hal config provider docker-registry enable
   ```
 
-### Kubernetesの連携設定
-  Kubernates Providerの機能を有効にする。
-  ```console
-  hal config provider kubernetes account add my-k8s-account \
-      --docker-registries my-gcr-account \
-      --context $(kubectl config current-context)
+### Kubernetesの連携設定（マニフェスト ベース）
+#### Kubernetesサービスアカウントを作成する
+  Spinnakerを[Kubernetesサービスアカウント](https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/)に関連付ける。
+  ```sh
+  CONTEXT=$(kubectl config current-context)
 
+  # 下記spinnaker.ioから取得したマニフェストではClusterAdminロールを使用したサービスアカウントが作成されますが
+  # ClusterAdmin権限が不要であれば、より限定的な権限を適用することも可能です。
+  kubectl apply --context $CONTEXT \
+      -f https://spinnaker.io/downloads/kubernetes/service-account.yml
+
+  TOKEN=$(kubectl get secret --context $CONTEXT \
+     $(kubectl get serviceaccount spinnaker-service-account \
+         --context $CONTEXT \
+         -n spinnaker \
+         -o jsonpath='{.secrets[0].name}') \
+     -n spinnaker \
+     -o jsonpath='{.data.token}' | base64 --decode)
+
+  kubectl config set-credentials ${CONTEXT}-token-user --token $TOKEN
+
+  kubectl config set-context $CONTEXT --user ${CONTEXT}-token-user
+  ```
+
+#### Kubernetes Provider V2 (Manifest base)の機能を有効にする。
+  kubernetes provider を有効にする。
+  ```sh
   hal config provider kubernetes enable
+  ```
+  アカウントを追加する。
+  ```sh
+  CONTEXT=$(kubectl config current-context)
+
+  hal config provider kubernetes account add my-k8s-v2-account \
+      --provider-version v2 \
+      --context $CONTEXT
+  ```
+  アーティファクトを有効にする
+  ```sh
+  hal config features edit --artifacts true
   ```
 
 ## Spinnakerのデプロイ
 ### デプロイの実行
   Kubernetes Providerの設定で作成したアカウントを指定してSpinnakerのデプロイを実施する。Spinnakerの各コンポーネントを分散配置するオプションを指定。
-  ```console
+  ```sh
   hal config deploy edit \
-    --account-name my-k8s-account \
+    --account-name my-k8s-v2-account \
     --type distributed
 
   hal deploy apply
@@ -194,8 +223,8 @@
 
 ### Spinnakerにアクセス
   Spinnaker UIにアクセスするためにport-forwardを実行する。
-  ```console
+  ```sh
   hal deploy connect
   ```
 
-  ブラウザで「http://localhost:9000」にアクセスする。
+  ブラウザで「[localhost:9000](http://localhost:9000)」にアクセスする。
