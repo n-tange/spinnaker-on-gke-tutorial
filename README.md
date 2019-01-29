@@ -4,6 +4,7 @@
 ## 参考元
 * Spinnaker公式：[Try out Halyard on GKE](https://www.spinnaker.io/setup/quickstart/halyard-gke/)
 * Spinnaker公式：[Kubernetes Provider V2 (Manifest Based)](https://www.spinnaker.io/setup/install/providers/kubernetes-v2/)
+* Spinnaker公式：[Configuring GCS Artifact Credentials](https://www.spinnaker.io/setup/artifacts/gcs/)
 
 ## Mac の準備
 ### gcloudをインストールする
@@ -124,7 +125,7 @@
       --zone=$GKE_CLUSTER_ZONE
   ```
 
-### GCPプロジェクト用サービスアカウントのjsonファイルを取得す
+### GCPプロジェクト用サービスアカウントのjsonファイルを取得する
   以下のコマンドで、先に作成した所有者権限のサービスアカウントのjsonファイルを取得する。
   ```sh
   GCP_SA=owner-service-account
@@ -168,6 +169,50 @@
   hal config provider docker-registry enable
   ```
 
+### GoogleCloudStorageアーティファクト認証情報の設定
+  SpinnakerのパイプラインステージでGCSオブジェクトをアーティファクトとして使用しデータを読み取るための設定をする。
+  GCPのロールroles/storage.adminが付与されたiamサービスアカウントを作成し、資格情報jsonファイルを取得する。
+  ```sh
+  SERVICE_ACCOUNT_NAME=spin-gcs-artifacts-account
+  SERVICE_ACCOUNT_DEST=~/.gcp/gcs-artifacts-account.json
+
+  gcloud iam service-accounts create \
+      $SERVICE_ACCOUNT_NAME \
+      --display-name $SERVICE_ACCOUNT_NAME
+
+  SA_EMAIL=$(gcloud iam service-accounts list \
+      --filter="displayName:$SERVICE_ACCOUNT_NAME" \
+      --format='value(email)')
+
+  PROJECT=$(gcloud info --format='value(config.project)')
+
+  gcloud projects add-iam-policy-binding $PROJECT \
+      --role roles/storage.admin --member serviceAccount:$SA_EMAIL
+
+  mkdir -p $(dirname $SERVICE_ACCOUNT_DEST)
+
+  gcloud iam service-accounts keys create $SERVICE_ACCOUNT_DEST \
+      --iam-account $SA_EMAIL
+  ```
+
+  アーティファクトサポートを有効にする。
+  ```sh
+  hal config features edit --artifacts true
+  ```
+
+  アーティファクトアカウントを追加する。
+  ```sh
+  ARTIFACT_ACCOUNT_NAME=my-gcs-artifact-account
+
+  hal config artifact gcs account add $ARTIFACT_ACCOUNT_NAME \
+    --json-path $SERVICE_ACCOUNT_DEST
+  ```
+
+  GCSアーティファクトサポートを有効にする。
+  ```sh
+  hal config artifact gcs enable
+  ```
+
 ### Kubernetesの連携設定（マニフェスト ベース）
 #### Kubernetesサービスアカウントを作成する
   Spinnakerを[Kubernetesサービスアカウント](https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/)に関連付ける。
@@ -204,10 +249,6 @@
   hal config provider kubernetes account add my-k8s-v2-account \
       --provider-version v2 \
       --context $CONTEXT
-  ```
-  アーティファクトを有効にする
-  ```sh
-  hal config features edit --artifacts true
   ```
 
 ## Spinnakerのデプロイ
