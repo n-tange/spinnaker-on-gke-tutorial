@@ -89,6 +89,7 @@
   Google Cloud Consoleに移動して、以下のAPIを有効にする。
   * [Google Identity and Access Management (IAM) API](https://console.developers.google.com/apis/api/iam.googleapis.com/overview)
   * [Google Cloud Resource Manager API](https://console.developers.google.com/apis/api/cloudresourcemanager.googleapis.com/overview)
+  * [Google Cloud Pub/Sub API](https://console.developers.google.com/apis/api/pubsub.googleapis.com/overview)
 
 ### 資格情報を設定する
   参照元のSpinnaker公式にある資格情報ではSpinnakerのデプロイに失敗するので所有者の資格情報を作成して使用した。本来であれば適切な資格情報を作成すべし。
@@ -213,7 +214,14 @@
   hal config artifact gcs enable
   ```
 
+### GoogleCloudPub/Subトリガーの有効化設定
+Google Cloud Pub/Subのトリガーを使用するには、Cloud Pub/SubのTopicとSubscription（とnotification）を作成する必要があるため
+その手順も合わせて説明する。
+
+TBD
+
 ### Kubernetesの連携設定（マニフェスト ベース）
+MultiCluster運用をする場合、この連携設定をCluster分実行する。
 #### Kubernetesサービスアカウントを作成する
   Spinnakerを[Kubernetesサービスアカウント](https://kubernetes.io/docs/reference/access-authn-authz/service-accounts-admin/)に関連付ける。
   ```sh
